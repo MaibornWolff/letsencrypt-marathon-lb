@@ -1,0 +1,54 @@
+{
+  "id": "/letsencrypt-marathon-lb",
+  "cpus": 0.05,
+  "mem": 256,
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [
+      {
+        "containerPath": "/letsencrypt/.lego",
+        "external": {
+          "name": "letsencrypt-marathon-lb-volume",
+          "provider": "dvdi",
+          "options": {
+            "dvdi/driver": "rexray"
+          }
+        },
+        "mode": "RW"
+      }
+    ],
+    "docker": {
+      "image": "maibornwolff/letsencrypt-marathon-lb",
+      "forcePullImage": true,
+      "network": "BRIDGE",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  },
+  "env": {
+    "MARATHON_LB_ID": "marathon-lb",
+    "MARATHON_URL": "https://marathon.mesos:8443",
+    "LETSENCRYPT_EMAIL": "TODO",
+    "LETSENCRYPT_URL": "https://acme-staging.api.letsencrypt.org/directory",
+    "DCOS_SERVICE_ACCOUNT_CREDENTIAL": { "secret": "serviceCredential" }
+  },
+  "secrets": {
+    "serviceCredential": {
+      "source": "letsencrypt-marathon-lb/marathon-secret"
+    }
+  },
+  "labels": {
+    "HAPROXY_0_VHOST": "example.com",
+    "HAPROXY_GROUP": "external",
+    "HAPROXY_0_PATH": "/.well-known/acme-challenge"
+  },
+  "upgradeStrategy": {
+    "minimumHealthCapacity": 0,
+    "maximumOverCapacity": 0
+  }
+}
