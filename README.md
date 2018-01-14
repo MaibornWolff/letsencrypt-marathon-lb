@@ -3,8 +3,9 @@ This application allows you to generate and renew Let's Encrypt certificates for
 The application is inspired heavily by the work done by Brenden Matthews (https://github.com/mesosphere/letsencrypt-dcos). In contrary to Brenden's tool, this application also supports DC/OS strict security mode. We decided to do a complete reimplementation because the rewrite was simpler than extending the existing solution. Code in auth.py is taken from https://github.com/mesosphere/marathon-lb/blob/master/common.py
 
 
+
 ## Getting started
-* Prepare service account in you DC/OS cluster
+* Prepare service account in you DC/OS cluster (only needed for clusters with strict security mode, optional for clusters in permissive security mode)
   * Create service account with necessary permissions for marathon api access
   * Create secret with private key of service account
   * You can use the script create_serviceaccount.sh (included in this git repo) to create both using the dcos-cli
@@ -16,6 +17,12 @@ The application is inspired heavily by the work done by Brenden Matthews (https:
   * Set name for external persistent volume or change volume definition to a local persistent volume
   * You can use the provided docker image (maibornwolff/letsencrypt-marathon-lb) or build it yourself
   * Deploy the application using the DC/OS Admin GUI or the dcos cli (dcos marathon app add letsencrypt-marathon-lb.json)
+
+```bash
+edit letsencrypt-marathon-lb.json # change LETSENCRYPT_EMAIL, HAPROXY_0_VHOST
+./create_serviceaccount.sh
+dcos marathon app add letsencrypt-marathon-lb.json
+```
 
 
 ## How does it work
@@ -37,6 +44,6 @@ The application is inspired heavily by the work done by Brenden Matthews (https:
 
 
 ## Future Features
-* Support for wildcard certificates as soon as letsencrypt issues them (January 2018)
+* Support for wildcard certificates as soon as letsencrypt issues them (February 2018)
 * Provide certificate to Marathon-lb via DC/OS secret
 * DC/OS ca-certificate verification on marathon api calls
