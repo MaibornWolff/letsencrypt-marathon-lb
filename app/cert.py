@@ -53,11 +53,15 @@ def update_marathon_app(app_id, **kwargs):
     for key, value in kwargs.items():
         data[key] = value
     headers = {'Content-Type': 'application/json'}
-    r = requests.patch("%(marathon_url)s/v2/apps/%(app_id)s" % dict(marathon_url=get_marathon_url(), app_id=app_id),
+    response = requests.patch("%(marathon_url)s/v2/apps/%(app_id)s" % dict(marathon_url=get_marathon_url(), app_id=app_id),
                      headers=headers,
                      data=json.dumps(data),
                      auth=auth,
                      verify=False)
+    if not response.ok:
+        print(response)
+        print(response.text)
+        raise Exception("Could not update app.")
     data = r.json()
     if not "deploymentId" in data:
         print(data)
@@ -66,8 +70,10 @@ def update_marathon_app(app_id, **kwargs):
 
     # Wait for deployment to complete
     deployment_exists = True
+    sum_wait_time = 0
     while deployment_exists:
         time.sleep(5)
+        sum_wait_time += 5
         print("Waiting for deployment to complete")
         r = requests.get("%(marathon_url)s/v2/deployments" % dict(marathon_url=get_marathon_url()), auth=auth, verify=False)
         deployments = r.json()
@@ -76,6 +82,8 @@ def update_marathon_app(app_id, **kwargs):
             if deployment['id'] == deployment_id:
                 deployment_exists = True
                 break
+        if sum_wait_time > 60*5:
+            raise Exception("Failed to update app due to timeout in deployment.")
 
 def get_vhosts():
     data = get_marathon_app(os.environ.get(ENV_MARATHON_APP_ID))
@@ -139,6 +147,7 @@ def upload_cert_to_marathon_lb(cert_filename):
     else:
         print("Certificate not changed. Not doing anything")
 
+
 def run_client():
     vhosts = get_vhosts()
     print("Requesting certificates for " + vhosts)
@@ -152,10 +161,31 @@ def run_client():
     sys.stdout.flush()
 
 
+def run_client_with_backoff():
+    backoff_seconds = 30
+    sum_wait_time = 0
+    while True:
+        try:
+            run_client()
+            return
+        except Exception as ex:
+            print(ex)
+            if sum_wait_time >= 60*60:
+                # Reraise exception after 1 hour backoff, will lead to task failure in marathon
+                raise ex
+            sum_wait_time += backoff_seconds
+            time.sleep(backoff_seconds)
+            backoff_seconds *= 2
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "service":
         while True:
             run_client()
+            time.sleep(24*60*60)
+    elif len(sys.argv) > 1 and sys.argv[1] == "service_with_backoff":
+        while True:
+            run_client_with_backoff()
             time.sleep(24*60*60)
     else:
         run_client()

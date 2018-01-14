@@ -6,4 +6,4 @@ RUN wget -q https://github.com/xenolf/lego/releases/download/v0.4.1/lego_linux_a
 COPY requirements.txt /letsencrypt/
 RUN pip install -r requirements.txt
 COPY app/auth.py app/cert.py /letsencrypt/
-CMD python cert.py service
+CMD ["python", "cert.py", "service"]
