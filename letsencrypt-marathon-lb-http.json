@@ -34,7 +34,7 @@
     "MARATHON_LB_ID": "marathon-lb",
     "MARATHON_URL": "https://marathon.mesos:8443",
     "LETSENCRYPT_EMAIL": "TODO",
-    "LETSENCRYPT_URL": "https://acme-staging.api.letsencrypt.org/directory",
+    "LETSENCRYPT_URL": "https://acme-staging-v02.api.letsencrypt.org/directory",
     "DCOS_SERVICE_ACCOUNT_CREDENTIAL": { "secret": "serviceCredential" }
   },
   "secrets": {
