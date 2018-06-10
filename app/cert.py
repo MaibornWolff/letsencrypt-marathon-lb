@@ -28,6 +28,7 @@ DEFAULT_LEGO_ARGS = ["./lego",
                      "--server", os.environ.get(ENV_LETSENCRYPT_URL, DEFAULT_LETSENCRYPT_URL),
                      "--email", os.environ.get(ENV_LETSENCRYPT_EMAIL),
                      "--accept-tos",
+                     "--pem",
                     ]
 LEGO_ARGS_HTTP = [
                  "--http", ":8080",
@@ -116,17 +117,11 @@ def get_domains():
         raise Exception("Unknown verification method: " + verification_method)
 
 
-def combine_certs(domain_name):
-    """Combine certificate and key into one file"""
-    result_path = "%(path)s/%(domain_name)s.combined.pem" % dict(path=CERTIFICATES_DIR, domain_name=domain_name)
-    with open(result_path, "w") as result_file:
-        with open("%(path)s/%(domain_name)s.crt" % dict(path=CERTIFICATES_DIR, domain_name=domain_name)) as cert_file:
-            data = cert_file.read()
-            result_file.write(data)
-        with open("%(path)s/%(domain_name)s.key" % dict(path=CERTIFICATES_DIR, domain_name=domain_name)) as key_file:
-            data = key_file.read()
-            result_file.write(data)
-    return result_path
+def get_cert_filepath(domain_name):
+    """Return path of combined cert"""
+    if domain_name.startwith("*"):
+        domain_name = domain_name.replace("*", "_")
+    return "%(path)s/%(domain_name)s.pem" % dict(path=CERTIFICATES_DIR, domain_name=domain_name)
 
 
 def read_domains_from_last_time():
@@ -199,7 +194,7 @@ def run_client():
     domains = get_domains()
     print("Requesting certificates for " + domains, flush=True)
     domain_name = generate_letsencrypt_cert(domains)
-    cert_file = combine_certs(domain_name)
+    cert_file = get_cert_filepath(domain_name)
     print("Uploading certificates", flush=True)
     upload_cert_to_marathon_lb(cert_file)
 
