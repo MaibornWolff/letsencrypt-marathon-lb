@@ -11,23 +11,33 @@ The application is inspired heavily by the work done by Brenden Matthews (https:
   * You can use the script create_serviceaccount.sh (included in this git repo) to create both using the dcos-cli
 * Deploy as marathon app (using the definition file letsencrypt-marathon-lb.json)
   * Change environment variables in marathon definition of this application
-    * LETSENCRYPT_EMAIL
-    * LETSENCRYPT_URL: Set to production url (https://acme-v01.api.letsencrypt.org/directory) only after you have confirmed it works!
-    * HAPROXY_0_VHOST: A comma-separated list of domains you want to include in your certificate (all of them must be reachable via marathon-lb or validation will fail)
+    * LETSENCRYPT_EMAIL: Set to your own email address (will receive expiration notifications by Let's Encrypt)
+    * LETSENCRYPT_URL: Set to production url (https://acme-v02.api.letsencrypt.org/directory) only after you have confirmed it works!
+    * For http verification set the following:
+      * HAPROXY_0_VHOST: A comma-separated list of domains you want to include in your certificate (all of them must be reachable via marathon-lb or validation will fail, wildcards are not supported with http verification method)
+      * LETSENCRYPT_VERIFICATION_METHOD to `http`
+    * For dns verification set the following:
+      * LETSENCRYPT_VERIFICATION_METHOD to `dns`
+      * DOMAINS: A comma-separated list of domains you want to include in your certificate, can include wildcard domains
+      * DNSPROVIDER: Set to your dns provider (see https://github.com/xenolf/lego/tree/master/providers/dns for a list of possible options), defaults to route53
+      * Provider-specific options (for route53: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_HOSTED_ZONE_ID)
   * Set name for external persistent volume or change volume definition to a local persistent volume
   * You can use the provided docker image (maibornwolff/letsencrypt-marathon-lb) or build it yourself
-  * Deploy the application using the DC/OS Admin GUI or the dcos cli (dcos marathon app add letsencrypt-marathon-lb.json)
+  * Deploy the application using the DC/OS Admin UI or the dcos cli
+
+Example marathon definitions are provided as `letsencrypt-marathon-lb-http.json` and `letsencrypt-marathon-lb-dns.json`.
 
 ```bash
-edit letsencrypt-marathon-lb.json # change LETSENCRYPT_EMAIL, HAPROXY_0_VHOST
+edit letsencrypt-marathon-lb-http.json # change variables as needed
 ./create_serviceaccount.sh
-dcos marathon app add letsencrypt-marathon-lb.json
+dcos marathon app add letsencrypt-marathon-lb-http.json
 ```
 
 
 ## How does it work
-* The script will get the domains from its own HAPROXY_0_VHOST label and instruct lego to request a certificate for them.
-* Due to the HAPROXY_0_VHOST and HAPROXY_0_PATH labels marathon-lb will proxy all requests to the letsencrypt verification paths for these domains to the script where lego will receive them and do a webroot-based verification.
+* The script will get the domains from its own HAPROXY_0_VHOST label or the DOMAINS environment variable depending on verification mode and instruct lego to request a certificate for them.
+* If verification method is http: Due to the HAPROXY_0_VHOST and HAPROXY_0_PATH labels marathon-lb will proxy all requests to the letsencrypt verification paths for these domains to the script where lego will receive them and do a webroot-based verification.
+* If verification method is dns: Using the provided credentials for your dns provider lego will perform dns verification and add the required dns records to your zone.
 * The script then uses the marathon api to update the HAPROXY_SSL_CERT variable of the marathon-lb app which will then (after a restart of the app) use the provided certificate for HTTPS connections.
 
 
@@ -35,6 +45,7 @@ dcos marathon app add letsencrypt-marathon-lb.json
 * Entire workflow done in python
 * Uses DC/OS service accounts and access tokens (needed when DC/OS cluster is configured with strict security mode)
 * [Lego](https://github.com/xenolf/lego) instead of certbot
+* Supports dns verification method and wildcard domains
 
 
 ## Limitations
@@ -44,6 +55,5 @@ dcos marathon app add letsencrypt-marathon-lb.json
 
 
 ## Future Features
-* Support for wildcard certificates as soon as letsencrypt issues them (February 2018)
 * Provide certificate to Marathon-lb via DC/OS secret
 * DC/OS ca-certificate verification on marathon api calls

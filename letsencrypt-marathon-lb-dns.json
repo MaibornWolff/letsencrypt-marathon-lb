@@ -1,0 +1,52 @@
+{
+  "id": "/letsencrypt-marathon-lb",
+  "cpus": 0.05,
+  "mem": 256,
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [
+      {
+        "containerPath": "/letsencrypt/.lego",
+        "external": {
+          "name": "letsencrypt-marathon-lb-volume",
+          "provider": "dvdi",
+          "options": {
+            "dvdi/driver": "rexray"
+          }
+        },
+        "mode": "RW"
+      }
+    ],
+    "docker": {
+      "image": "maibornwolff/letsencrypt-marathon-lb",
+      "forcePullImage": true,
+      "network": "BRIDGE"
+    }
+  },
+  "env": {
+    "MARATHON_LB_ID": "marathon-lb",
+    "MARATHON_URL": "https://marathon.mesos:8443",
+    "LETSENCRYPT_EMAIL": "TODO",
+    "LETSENCRYPT_URL": "https://acme-staging-v02.api.letsencrypt.org/directory",
+    "LETSENCRYPT_VERIFICATION_METHOD": "dns",
+    "DOMAINS": "example.com,*.example.com",
+    "DNSPROVIDER": "route53",
+    "AWS_ACCESS_KEY_ID": "TODO",
+    "AWS_SECRET_ACCESS_KEY": "TODO",
+    "AWS_REGION": "TODO",
+    "AWS_HOSTED_ZONE_ID": "TODO",
+    "DCOS_SERVICE_ACCOUNT_CREDENTIAL": { "secret": "serviceCredential" }
+  },
+  "secrets": {
+    "serviceCredential": {
+      "source": "letsencrypt-marathon-lb/marathon-secret"
+    }
+  },
+  "labels": {
+  },
+  "upgradeStrategy": {
+    "minimumHealthCapacity": 0,
+    "maximumOverCapacity": 0
+  }
+}
