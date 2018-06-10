@@ -15,19 +15,30 @@ HAPROXY_SSL_CERT = "HAPROXY_SSL_CERT"
 ENV_MARATHON_LB_ID = "MARATHON_LB_ID"
 ENV_LETSENCRYPT_EMAIL = "LETSENCRYPT_EMAIL"
 ENV_LETSENCRYPT_URL = "LETSENCRYPT_URL"
+ENV_VERIFICATION_METHOD = "LETSENCRYPT_VERIFICATION_METHOD"
+ENV_DOMAINS = "DOMAINS"
+ENV_DNSPROVIDER = "DNSPROVIDER"
 DEFAULT_LETSENCRYPT_URL = "https://acme-staging.api.letsencrypt.org/directory"
 
 CERTIFICATES_DIR = ".lego/certificates/"
-VHOSTS_FILE = ".lego/current_vhosts"
+DOMAINS_FILE = ".lego/current_domains"
 
 
 DEFAULT_LEGO_ARGS = ["./lego",
                      "--server", os.environ.get(ENV_LETSENCRYPT_URL, DEFAULT_LETSENCRYPT_URL),
                      "--email", os.environ.get(ENV_LETSENCRYPT_EMAIL),
                      "--accept-tos",
-                     "--http", ":8080",
-                     "--exclude", "tls-sni-01" # To make lego use the http-01 resolver
                     ]
+LEGO_ARGS_HTTP = [
+                 "--http", ":8080",
+                 "--exclude", "tls-sni-01" # To make lego use the http-01 resolver
+                 ]
+
+LEGO_ARGS_DNS = [
+    "--dns-resolvers", "8.8.8.8:53",
+    "--exclude", "http-01",
+]
+
 
 
 def get_marathon_url():
@@ -36,7 +47,7 @@ def get_marathon_url():
 
 def get_authorization():
     if not ENV_DCOS_SERVICE_ACCOUNT_CREDENTIAL in os.environ:
-        print("No service account provided. Not using authorization")
+        print("No service account provided. Not using authorization", flush=True)
         return None
     return DCOSAuth(os.environ.get(ENV_DCOS_SERVICE_ACCOUNT_CREDENTIAL), None)
 
@@ -65,11 +76,11 @@ def update_marathon_app(app_id, **kwargs):
                      verify=False)
     if not response.ok:
         print(response)
-        print(response.text)
+        print(response.text, flush=True)
         raise Exception("Could not update app. See response text for error message.")
     data = response.json()
     if not "deploymentId" in data:
-        print(data)
+        print(data, flush=True)
         raise Exception("Could not update app. Marathon did not return deployment id.  See response data for error message.")
     deployment_id = data['deploymentId']
 
@@ -79,7 +90,7 @@ def update_marathon_app(app_id, **kwargs):
     while deployment_exists:
         time.sleep(5)
         sum_wait_time += 5
-        print("Waiting for deployment to complete")
+        print("Waiting for deployment to complete", flush=True)
         # Retrivee list of running deployments
         response = requests.get("%(marathon_url)s/v2/deployments" % dict(marathon_url=get_marathon_url()), auth=auth, verify=False)
         deployments = response.json()
@@ -93,10 +104,16 @@ def update_marathon_app(app_id, **kwargs):
             raise Exception("Failed to update app due to timeout in deployment.")
 
 
-def get_vhosts():
-    """Retrieve list of vhosts from own app definition"""
+def get_domains():
+    """Retrieve list of domains from own app definition or from environment variable based on verification method"""
     data = get_marathon_app(os.environ.get(ENV_MARATHON_APP_ID))
-    return data["app"]["labels"]["HAPROXY_0_VHOST"]
+    verification_method = os.environ.get(ENV_VERIFICATION_METHOD, "http")
+    if verification_method == "http":
+        return data["app"]["labels"]["HAPROXY_0_VHOST"]
+    elif verification_method == "dns":
+        return os.environ.get(ENV_DOMAINS)
+    else:
+        raise Exception("Unknown verification method: " + verification_method)
 
 
 def combine_certs(domain_name):
@@ -112,45 +129,51 @@ def combine_certs(domain_name):
     return result_path
 
 
-def read_vhosts_from_last_time():
-    """Return list of vhosts used last time from file or empty sttring if file does not exist"""
-    if os.path.exists(VHOSTS_FILE):
-        with open(VHOSTS_FILE) as vhosts_file:
-            return vhosts_file.read()
+def read_domains_from_last_time():
+    """Return list of domains used last time from file or empty sttring if file does not exist"""
+    if os.path.exists(DOMAINS_FILE):
+        with open(DOMAINS_FILE) as domains_file:
+            return domains_file.read()
     else:
         return ""
 
 
-def write_vhosts_to_file(vhosts):
-    """Store list of vhosts in file to retrieve on next run"""
-    with open(VHOSTS_FILE, "w") as vhosts_file:
-        vhosts_file.write(vhosts)
+def write_domains_to_file(domains):
+    """Store list of domains in file to retrieve on next run"""
+    with open(DOMAINS_FILE, "w") as domains_file:
+        domains_file.write(domains)
 
 
-def generate_letsencrypt_cert(vhosts):
+def generate_letsencrypt_cert(domains):
     """Use lego to validate domains and retrieve letsencrypt certificates"""
-    vhosts_changed = vhosts != read_vhosts_from_last_time()
-    first_vhost = vhosts.split(",")[0]
+    domains_changed = domains != read_domains_from_last_time()
+    first_domain = domains.split(",")[0]
     args = list()
-    for vhost in vhosts.split(","):
+    for domain in domains.split(","):
         args.append("--domains")
-        args.append(vhost)
+        args.append(domain)
+
+    verification_method = os.environ.get(ENV_VERIFICATION_METHOD, "http")
+    if verification_method == "http":
+        args = args + LEGO_ARGS_HTTP
+    elif verification_method == "dns":
+        args = args + ["--dns", os.environ.get(ENV_DNSPROVIDER, "route53")] + LEGO_ARGS_DNS
     # Check if certificate already exists
-    if not vhosts_changed and os.path.exists("%(path)s/%(domain_name)s.crt" % dict(path=CERTIFICATES_DIR, domain_name=first_vhost)):
-        print("Renewing certificates")
+    if not domains_changed and os.path.exists("%(path)s/%(domain_name)s.crt" % dict(path=CERTIFICATES_DIR, domain_name=first_domain)):
+        print("Renewing certificates", flush=True)
         args.append("renew")
         args.append("--days")
         args.append("80")
     else:
-        print("Requesting new certificates")
+        print("Requesting new certificates", flush=True)
         args.append("run")
     # Start lego
     result = subprocess.run(DEFAULT_LEGO_ARGS + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode != 0:
         print(result)
         raise Exception("Obtaining certificates failed. Check lego output for error messages.")
-    write_vhosts_to_file(vhosts)
-    return first_vhost
+    write_domains_to_file(domains)
+    return first_domain
 
 
 def upload_cert_to_marathon_lb(cert_filename):
@@ -163,26 +186,22 @@ def upload_cert_to_marathon_lb(cert_filename):
     env = app_data["app"]["env"]
     # Compare old and new certs
     if env.get(HAPROXY_SSL_CERT, "") != cert_data:
-        print("Certificate changed. Updating certificate")
+        print("Certificate changed. Updating certificate", flush=True)
         env[HAPROXY_SSL_CERT] = cert_data
         # Provide env and secrets otherwise marathon will complain about a missing secret
         update_marathon_app(marathon_lb_id, env=env, secrets=app_data["app"].get("secrets", {}))
     else:
-        print("Certificate not changed. Not doing anything")
+        print("Certificate not changed. Not doing anything", flush=True)
 
 
 def run_client():
     """Generate certificates if necessary and update marathon-lb"""
-    vhosts = get_vhosts()
-    print("Requesting certificates for " + vhosts)
-    sys.stdout.flush()
-    domain_name = generate_letsencrypt_cert(vhosts)
-    sys.stdout.flush()
+    domains = get_domains()
+    print("Requesting certificates for " + domains, flush=True)
+    domain_name = generate_letsencrypt_cert(domains)
     cert_file = combine_certs(domain_name)
-    print("Uploading certificates")
-    sys.stdout.flush()
+    print("Uploading certificates", flush=True)
     upload_cert_to_marathon_lb(cert_file)
-    sys.stdout.flush()
 
 
 def run_client_with_backoff():
