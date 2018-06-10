@@ -24,16 +24,17 @@ CERTIFICATES_DIR = ".lego/certificates/"
 DOMAINS_FILE = ".lego/current_domains"
 
 
-DEFAULT_LEGO_ARGS = ["./lego",
-                     "--server", os.environ.get(ENV_LETSENCRYPT_URL, DEFAULT_LETSENCRYPT_URL),
-                     "--email", os.environ.get(ENV_LETSENCRYPT_EMAIL),
-                     "--accept-tos",
-                     "--pem",
-                    ]
+DEFAULT_LEGO_ARGS = [
+    "./lego",
+    "--server", os.environ.get(ENV_LETSENCRYPT_URL, DEFAULT_LETSENCRYPT_URL),
+    "--email", os.environ.get(ENV_LETSENCRYPT_EMAIL),
+    "--accept-tos",
+    "--pem",
+]
 LEGO_ARGS_HTTP = [
-                 "--http", ":8080",
-                 "--exclude", "tls-sni-01" # To make lego use the http-01 resolver
-                 ]
+    "--http", ":8080",
+    "--exclude", "tls-sni-01" # To make lego use the http-01 resolver
+]
 
 LEGO_ARGS_DNS = [
     "--dns-resolvers", "8.8.8.8:53",
@@ -43,10 +44,12 @@ LEGO_ARGS_DNS = [
 
 
 def get_marathon_url():
+    """Retrieves the marathon base url to use from an environment variable"""
     return os.environ.get(ENV_MARATHON_URL, DEFAULT_MARATHON_URL)
 
 
 def get_authorization():
+    """Initializes the authorization object from a secret"""
     if not ENV_DCOS_SERVICE_ACCOUNT_CREDENTIAL in os.environ:
         print("No service account provided. Not using authorization", flush=True)
         return None
@@ -71,10 +74,7 @@ def update_marathon_app(app_id, **kwargs):
         data[key] = value
     headers = {'Content-Type': 'application/json'}
     response = requests.patch("%(marathon_url)s/v2/apps/%(app_id)s" % dict(marathon_url=get_marathon_url(), app_id=app_id),
-                     headers=headers,
-                     data=json.dumps(data),
-                     auth=auth,
-                     verify=False)
+                              headers=headers, data=json.dumps(data), auth=auth, verify=False)
     if not response.ok:
         print(response)
         print(response.text, flush=True)
@@ -119,7 +119,7 @@ def get_domains():
 
 def get_cert_filepath(domain_name):
     """Return path of combined cert"""
-    if domain_name.startwith("*"):
+    if domain_name.startswith("*"):
         domain_name = domain_name.replace("*", "_")
     return "%(path)s/%(domain_name)s.pem" % dict(path=CERTIFICATES_DIR, domain_name=domain_name)
 
