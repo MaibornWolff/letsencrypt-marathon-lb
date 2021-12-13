@@ -1,3 +1,6 @@
+# END OF LIFE
+This project is not being maintained anymore.
+
 This application allows you to generate and renew Let's Encrypt certificates for Marathon-lb automatically. It must be run as a Marathon app. The application generates or renews the certificates upon startup and checks every 24h if certificates need to be renewed. If you need certificates for new / additional domains, you have to change the configuration and restart the application.
 
 The application is inspired heavily by the work done by Brenden Matthews (https://github.com/mesosphere/letsencrypt-dcos). In contrary to Brenden's tool, this application also supports DC/OS strict security mode. We decided to do a complete reimplementation because the rewrite was simpler than extending the existing solution. Code in auth.py is taken from https://github.com/mesosphere/marathon-lb/blob/master/common.py
